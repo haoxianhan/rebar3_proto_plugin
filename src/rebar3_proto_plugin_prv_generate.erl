@@ -12,56 +12,68 @@ generate(AppInfo, State) ->
     {ok, ProtoOpts} = dict:find(proto_opts, Opts),
     MetaFileName = proplists:get_value(meta_file, ProtoOpts, "proto.meta"),
     MetaFile = filename:join([AppDir, MetaFileName]),
-    Meta = load_meta_file(MetaFile),
+
+    Meta = read_meta_file(MetaFile),
     rebar_api:debug("proto load meta : ~p~n", [{Meta}]),
 
     {ok, GpbOpts} = dict:find(gpb_opts, Opts),
     FoundProtos = find_proto_files(AppDir, DepsDir, GpbOpts),
-    NewMeta = generate_from_proto(Meta, FoundProtos, GpbOpts),
+    NewMeta = load_proto_file(Meta, FoundProtos, GpbOpts),
 
-    rebar_api:debug("proto write meta : ~p~n", [{Meta}]),
+    rebar_api:debug("proto write meta : ~p~n", [{NewMeta}]),
     write_meta_file(MetaFile, NewMeta),
     ok.
 
-generate_from_proto(Meta, [], _GpbOpts) ->
+load_proto_file(Meta, [], _GpbOpts) ->
     Meta;
-generate_from_proto(Meta, [HProto|T], GpbOpts) ->
+load_proto_file(Meta, [HProto|T], GpbOpts) ->
     ProtoBaseName = filename:basename(HProto, ".proto"),
     Mod = list_to_atom(filename:basename(get_target(HProto, GpbOpts), ".erl")),
     MsgNames = Mod:get_msg_containment(ProtoBaseName),
-    NewMeta = generate_from_msg(Mod, Meta, MsgNames),
-    generate_from_proto(NewMeta, T, GpbOpts).
+    NewMeta = load_msg(Mod, Meta, MsgNames),
+    load_proto_file(NewMeta, T, GpbOpts).
 
-generate_from_msg(_Mod, Meta, []) ->
+load_msg(_Mod, Meta, []) ->
     Meta;
-generate_from_msg(Mod, Meta, [HMsg|T]) ->
+load_msg(Mod, Meta, [HMsg|T]) ->
     #{code_count := CodeCount} = Meta,
     NewMeta = case maps:is_key(HMsg, Meta) of
                   false ->
                       AccCodeCount = CodeCount + 1,
-                      Value = #{msg_code => AccCodeCount,
-                                pb_module => Mod},
-                      Meta1 = maps:put(HMsg, Value, Meta),
+                      Meta1 = add_msg_to_meta(Meta, HMsg, AccCodeCount, Mod),
                       Meta2 = maps:update(code_count, AccCodeCount, Meta1),
                       Meta2;
                   _ ->
                       Meta
               end,
-    generate_from_msg(Mod, NewMeta, T).
+    load_msg(Mod, NewMeta, T).
+
+
+%%
+add_msg_to_meta(Meta, MsgName, MsgCode, PbModule) ->
+    Value = #{msg_code => MsgCode,
+              pb_module => PbModule},
+    maps:put(MsgName, Value, Meta).
 
 %% read meta file
-load_meta_file(MetaFile) ->
+read_meta_file(MetaFile) ->
     rebar_api:debug("read meta file: ~p~n", [MetaFile]),
     case file:consult(MetaFile) of
-        {ok, [Meta]} ->
-            maps:from_list(Meta);
+        {ok, [[CodeCount|RawMeta]]} ->
+            Map = #{code_count => CodeCount},
+            lists:foldl(fun({MsgName, MsgCode, PbModule}, AccMap) ->
+                                add_msg_to_meta(AccMap, MsgName, MsgCode, PbModule)
+                        end, Map, RawMeta);
         _ ->
             #{code_count => 0}
     end.
 
 %% write meta file
 write_meta_file(MetaFile, Meta) ->
-    ok = file:write_file(MetaFile, io_lib:format("~p.~n", [lists:keysort(1, maps:to_list(Meta))])).
+    {CodeCount, Meta0} = maps:take(code_count, Meta),
+    List0 = lists:keysort(1, [{MsgName, MsgCode, PbModule}
+                              || {MsgName, #{msg_code:=MsgCode, pb_module:=PbModule}} <- maps:to_list(Meta0)]),
+    ok = file:write_file(MetaFile, io_lib:format("~p.~n", [[CodeCount|List0]])).
 
 
 
