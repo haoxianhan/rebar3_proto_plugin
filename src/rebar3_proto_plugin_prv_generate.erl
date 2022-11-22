@@ -1,107 +1,88 @@
 -module(rebar3_proto_plugin_prv_generate).
 
+% -include_lib("syntax_tools/include/merl.hrl").
+
 -export([
-        generate/2
+         generate/2,
+         test/0
         ]).
 
 generate(AppInfo, State) ->
+    {ok, Meta} = rebar3_proto_plugin_meta:generate_meta(AppInfo, State),
+    MetaList = to_list(Meta),
+
     AppDir = rebar_app_info:dir(AppInfo),
-    DepsDir = rebar_dir:deps_dir(State),
     Opts = rebar_app_info:opts(AppInfo),
-
     {ok, ProtoOpts} = dict:find(proto_opts, Opts),
-    MetaFileName = proplists:get_value(meta_file, ProtoOpts, "proto.meta"),
-    MetaFile = filename:join([AppDir, MetaFileName]),
+    ProtoInfoName = proplists:get_value(o_proto_info, ProtoOpts, "proto_info.erl"),
+    OutProtoInfo = filename:join([AppDir, ProtoInfoName]),
 
-    Meta = read_meta_file(MetaFile),
-    rebar_api:debug("proto load meta : ~p~n", [{Meta}]),
-
-    {ok, GpbOpts} = dict:find(gpb_opts, Opts),
-    FoundProtos = find_proto_files(AppDir, DepsDir, GpbOpts),
-    NewMeta = load_proto_file(Meta, FoundProtos, GpbOpts),
-
-    rebar_api:debug("proto write meta : ~p~n", [{NewMeta}]),
-    write_meta_file(MetaFile, NewMeta),
+    generate_proto_info(MetaList, OutProtoInfo),
     ok.
 
-load_proto_file(Meta, [], _GpbOpts) ->
-    Meta;
-load_proto_file(Meta, [HProto|T], GpbOpts) ->
-    ProtoBaseName = filename:basename(HProto, ".proto"),
-    Mod = list_to_atom(filename:basename(get_target(HProto, GpbOpts), ".erl")),
-    MsgNames = Mod:get_msg_containment(ProtoBaseName),
-    NewMeta = load_msg(Mod, Meta, MsgNames),
-    load_proto_file(NewMeta, T, GpbOpts).
 
-load_msg(_Mod, Meta, []) ->
-    Meta;
-load_msg(Mod, Meta, [HMsg|T]) ->
-    #{code_count := CodeCount} = Meta,
-    NewMeta = case maps:is_key(HMsg, Meta) of
-                  false ->
-                      AccCodeCount = CodeCount + 1,
-                      Meta1 = add_msg_to_meta(Meta, HMsg, AccCodeCount, Mod),
-                      Meta2 = maps:update(code_count, AccCodeCount, Meta1),
-                      Meta2;
-                  _ ->
-                      Meta
-              end,
-    load_msg(Mod, NewMeta, T).
+generate_proto_info(MetaList, OutProtoInfo) ->
+    Module = generate_module(proto_info, MetaList),
+    Formatted = erl_prettypr:format(Module),
+    ok = file:write_file(OutProtoInfo, Formatted),
+    ok.
+
+generate_module(ModName, MetaList) ->
+    Mod = erl_syntax:attribute(erl_syntax:atom(module), [erl_syntax:atom(ModName)]),
+    ExportList = [ erl_syntax:arity_qualifier(erl_syntax:atom(Fun), erl_syntax:integer(1))
+                    || Fun <- [get_msg_name, get_msg_code, get_msg_pbmodule] ],
+    Export = erl_syntax:attribute(erl_syntax:atom(export),
+                                   [erl_syntax:list(ExportList)]),
+    Clauses = lists:append([Fun(MetaList) || Fun <- [fun generate_get_msg_name/1,
+                                                   fun generate_get_msg_code/1,
+                                                   fun generate_get_msg_pbmodule/1]]),
+
+    erl_syntax:form_list([Mod, Export|Clauses]).
+
+%% get_msg_name(MsgCode) -> MsgName.
+generate_get_msg_name(MetaList) ->
+    Name = erl_syntax:atom(get_msg_name),
+    Clauses = [ erl_syntax:clause([erl_syntax:integer(MsgCode)], none, [erl_syntax:atom(MsgName)])
+                || {{msg_name, MsgName},
+                    {msg_code, MsgCode},
+                    {pt_moduel, _PbModule}} <- MetaList ],
+    AlwaysMatch = generate_clause_match_all(),
+    [ erl_syntax:function(Name, Clauses ++ [AlwaysMatch]) ].
+
+%% get_msg_code(MsgName) -> MsgCode.
+generate_get_msg_code(MetaList) ->
+    Name = erl_syntax:atom(get_msg_code),
+    Clauses = [ erl_syntax:clause([erl_syntax:atom(MsgName)], none, [erl_syntax:integer(MsgCode)])
+                || {{msg_name, MsgName},
+                    {msg_code, MsgCode},
+                    {pt_moduel, _PbModule}} <- MetaList ],
+    AlwaysMatch = generate_clause_match_all(),
+    [ erl_syntax:function(Name, Clauses ++ [AlwaysMatch]) ].
+
+%% get_msg_pbmodule(MsgCode) -> PbModule.
+generate_get_msg_pbmodule(MetaList) ->
+    Name = erl_syntax:atom(get_msg_pbmodule),
+    Clauses = [ erl_syntax:clause([erl_syntax:integer(MsgCode)], none, [erl_syntax:atom(PbModule)])
+                || [{msg_name, _MsgName},
+                    {msg_code, MsgCode},
+                    {pt_moduel, PbModule}] <- MetaList ],
+    AlwaysMatch = generate_clause_match_all(),
+    [ erl_syntax:function(Name, Clauses ++ [AlwaysMatch]) ].
+
+generate_clause_match_all() ->
+    erl_syntax:clause([erl_syntax:underscore()], none, [erl_syntax:atom(undefined)]).
+
+test() ->
+    List = [[{msg_name, list_to_atom("msg" ++ integer_to_list(X))},
+             {msg_code, 1000+X},
+             {pt_moduel, list_to_atom("pb_msg" ++ integer_to_list(X))}] || X <- lists:seq(1,8000)],
+    {Micros, Res} = timer:tc(fun generate_proto_info/2, [List, "proto.erl"]),
+    io:format("haoxian ~p~n", [{Micros, Res}]).
 
 
-%%
-add_msg_to_meta(Meta, MsgName, MsgCode, PbModule) ->
-    Value = #{msg_code => MsgCode,
-              pb_module => PbModule},
-    maps:put(MsgName, Value, Meta).
-
-%% read meta file
-read_meta_file(MetaFile) ->
-    rebar_api:debug("read meta file: ~p~n", [MetaFile]),
-    case file:consult(MetaFile) of
-        {ok, [[CodeCount|RawMeta]]} ->
-            Map = #{code_count => CodeCount},
-            lists:foldl(fun({MsgName, MsgCode, PbModule}, AccMap) ->
-                                add_msg_to_meta(AccMap, MsgName, MsgCode, PbModule)
-                        end, Map, RawMeta);
-        _ ->
-            #{code_count => 0}
-    end.
-
-%% write meta file
-write_meta_file(MetaFile, Meta) ->
-    {CodeCount, Meta0} = maps:take(code_count, Meta),
-    List0 = lists:keysort(1, [{MsgName, MsgCode, PbModule}
-                              || {MsgName, #{msg_code:=MsgCode, pb_module:=PbModule}} <- maps:to_list(Meta0)]),
-    ok = file:write_file(MetaFile, io_lib:format("~p.~n", [[CodeCount|List0]])).
-
-
-
-%% copy from rebar3_gbp_plugin
-discover(AppDir, SourceDir, Recursive) ->
-    %% Convert simple extension to proper regex
-    SourceExtRe = "^[^._].*\\" ++ ".proto" ++ [$$],
-
-    %% Find all possible source files
-    rebar_utils:find_files(filename:join([AppDir, SourceDir]),
-                           SourceExtRe, Recursive).
-
-%% copy from rebar3_gbp_plugin
-find_proto_files(AppDir, DepsDir, GpbOpts) ->
-    %% check if non-recursive
-    Recursive = proplists:get_value(recursive, GpbOpts, true),
-    SourceDirs = proplists:get_all_values(i, GpbOpts),
-    FoundProtos = lists:foldl(fun({deps, SourceDir}, Acc) ->
-                                      Acc ++ discover(DepsDir, SourceDir, Recursive);
-                                 (SourceDir, Acc) ->
-                                      Acc ++ discover(AppDir, SourceDir, Recursive)
-                              end, [], SourceDirs),
-    rebar_api:debug("proto files found~s: ~p",
-                    [case Recursive of true -> " recursively"; false -> "" end, FoundProtos]),
-    FoundProtos.
-
-%% copy from rebar3_gbp_plugin
-get_target(Proto, GpbOpts) ->
-    InputsOutputs = gpb_compile:list_io(Proto, GpbOpts),
-    {erl_output, Erl} = lists:keyfind(erl_output, 1, InputsOutputs),
-    Erl.
+to_list(Meta) ->
+    {_CodeCount, Meta0} = maps:take(code_count, Meta),
+    lists:keysort(1, [{{msg_name, MsgName},
+                       {msg_code, MsgCode},
+                       {pt_moduel, PbModule}}
+                      || {MsgName, #{msg_code:=MsgCode, pb_module:=PbModule}} <- maps:to_list(Meta0)]).
