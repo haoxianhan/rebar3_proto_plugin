@@ -1,9 +1,9 @@
 Rebar3 proto plugin
 =====
 
-A rebar plugin for generating proto info.
+A rebar plugin for generating module `proto_info`, which provides frequently-used functions when using [gpb](https://github.com/tomas-abrahamsson/gpb) flow.
 
-Depend on [rebar3_gpb_plugin](https://github.com/lrascao/rebar3_gpb_plugin), [Configure](https://github.com/lrascao/rebar3_gpb_plugin#usage-with-umbrella-projects) it first.
+This plugin cooperates with [rebar3_gpb_plugin](https://github.com/lrascao/rebar3_gpb_plugin), [Configure](https://github.com/lrascao/rebar3_gpb_plugin#usage-with-umbrella-projects) it first.
 
 Build
 -----
@@ -17,7 +17,8 @@ Add the plugin to your rebar config:
 
 ```erlang
     {project_plugins, [
-        {rebar3_proto_plugin, {git, "https://host/user/rebar3_proto_plugin.git", {tag, "0.1.0"}}}
+        {rebar3_gpb_plugin, "2.22.1"},
+        {rebar3_proto_plugin, "0.1.1"}
     ]}.
 ```
 
