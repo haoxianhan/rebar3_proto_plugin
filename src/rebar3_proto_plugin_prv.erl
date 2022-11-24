@@ -16,7 +16,7 @@ init(State) ->
             {module, ?MODULE},
             {bare, true},
             {deps, ?DEPS},
-            {example, "rebar3 rebar3_proto_plugin"},
+            {example, "rebar3 proto"},
             {opts, []},
             {short_desc, "A rebar plugin"},
             {desc, "A rebar plugin"}

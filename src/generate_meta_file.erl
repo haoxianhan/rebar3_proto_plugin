@@ -11,7 +11,7 @@ generate(AppInfo, State) ->
     Opts = rebar_app_info:opts(AppInfo),
 
     {ok, ProtoOpts} = dict:find(proto_opts, Opts),
-    MetaFileName = proplists:get_value(meta_file, ProtoOpts, "proto.meta"),
+    MetaFileName = proplists:get_value(o_meta_file, ProtoOpts, "proto.meta"),
     MetaFile = filename:join([AppDir, MetaFileName]),
 
     Meta = read_meta_file(MetaFile),
