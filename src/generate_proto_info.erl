@@ -42,7 +42,7 @@ generate_get_msg_name(MetaList) ->
     Clauses = [ erl_syntax:clause([erl_syntax:integer(MsgCode)], none, [erl_syntax:atom(MsgName)])
                 || {{msg_name, MsgName},
                     {msg_code, MsgCode},
-                    {pt_moduel, _PbModule}} <- MetaList ],
+                    {pb_moduel, _PbModule}} <- MetaList ],
     AlwaysMatch = generate_clause_match_all(),
     [ erl_syntax:function(Name, Clauses ++ [AlwaysMatch]) ].
 
@@ -52,7 +52,7 @@ generate_get_msg_code(MetaList) ->
     Clauses = [ erl_syntax:clause([erl_syntax:atom(MsgName)], none, [erl_syntax:integer(MsgCode)])
                 || {{msg_name, MsgName},
                     {msg_code, MsgCode},
-                    {pt_moduel, _PbModule}} <- MetaList ],
+                    {pb_moduel, _PbModule}} <- MetaList ],
     AlwaysMatch = generate_clause_match_all(),
     [ erl_syntax:function(Name, Clauses ++ [AlwaysMatch]) ].
 
@@ -62,7 +62,7 @@ generate_get_msg_pbmodule(MetaList) ->
     Clauses = [ erl_syntax:clause([erl_syntax:integer(MsgCode)], none, [erl_syntax:atom(PbModule)])
                 || [{msg_name, _MsgName},
                     {msg_code, MsgCode},
-                    {pt_moduel, PbModule}] <- MetaList ],
+                    {pb_moduel, PbModule}] <- MetaList ],
     AlwaysMatch = generate_clause_match_all(),
     [ erl_syntax:function(Name, Clauses ++ [AlwaysMatch]) ].
 
@@ -72,7 +72,7 @@ generate_clause_match_all() ->
 test() ->
     List = [[{msg_name, list_to_atom("msg" ++ integer_to_list(X))},
              {msg_code, 1000+X},
-             {pt_moduel, list_to_atom("pb_msg" ++ integer_to_list(X))}] || X <- lists:seq(1,8000)],
+             {pb_moduel, list_to_atom("pb_msg" ++ integer_to_list(X))}] || X <- lists:seq(1,8000)],
     {Micros, Res} = timer:tc(fun generate_proto_info/2, [List, "proto.erl"]),
     io:format("haoxian ~p~n", [{Micros, Res}]).
 
