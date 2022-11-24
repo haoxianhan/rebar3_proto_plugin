@@ -1,11 +1,11 @@
--module(rebar3_proto_plugin_meta).
+-module(generate_meta_file).
 
 -export([
-         generate_meta/2
+         generate/2
         ]).
 
 %% create proto.meta file
-generate_meta(AppInfo, State) ->
+generate(AppInfo, State) ->
     AppDir = rebar_app_info:dir(AppInfo),
     DepsDir = rebar_dir:deps_dir(State),
     Opts = rebar_app_info:opts(AppInfo),
