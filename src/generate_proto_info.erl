@@ -10,15 +10,16 @@ generate(AppInfo, _State, MetaList) ->
     AppDir = rebar_app_info:dir(AppInfo),
     Opts = rebar_app_info:opts(AppInfo),
     {ok, ProtoOpts} = dict:find(proto_opts, Opts),
-    ProtoInfoName = proplists:get_value(o_proto_info, ProtoOpts, "proto_info.erl"),
-    OutProtoInfo = filename:join([AppDir, ProtoInfoName]),
+    ProtoInfoFile = proplists:get_value(o_proto_info, ProtoOpts, "proto_info.erl"),
+    OutProtoInfo = filename:join([AppDir, ProtoInfoFile]),
 
     generate_proto_info(MetaList, OutProtoInfo),
     ok.
 
 
 generate_proto_info(MetaList, OutProtoInfo) ->
-    Module = generate_module(proto_info, MetaList),
+    ModuleName = erlang:list_to_atom(filename:rootname(filename:basename(OutProtoInfo))),
+    Module = generate_module(ModuleName, MetaList),
     Formatted = erl_prettypr:format(Module),
     ok = file:write_file(OutProtoInfo, Formatted),
     ok.
