@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+message shop_info {
+    uint32 id = 1;
+    string name = 2;
+    string address = 3;
+}
+
+message req_shop_info {
+}
+
+message resp_shop_info {
+    repeated shop_info shop_list = 1;
+}
+

@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+message req_heartbeat {
+  uint32 client_time = 1;
+}
+
+message resp_heartbeat {
+  uint32 client_time = 1;
+  uint32 server_time = 2;
+}
+
