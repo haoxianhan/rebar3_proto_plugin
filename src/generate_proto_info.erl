@@ -60,9 +60,9 @@ generate_get_msg_code(MetaList) ->
 generate_get_msg_pbmodule(MetaList) ->
     Name = erl_syntax:atom(get_msg_pbmodule),
     Clauses = [ erl_syntax:clause([erl_syntax:integer(MsgCode)], none, [erl_syntax:atom(PbModule)])
-                || [{msg_name, _MsgName},
+                || {{msg_name, _MsgName},
                     {msg_code, MsgCode},
-                    {pb_module, PbModule}] <- MetaList ],
+                    {pb_module, PbModule}} <- MetaList ],
     AlwaysMatch = generate_clause_match_all(),
     [ erl_syntax:function(Name, Clauses ++ [AlwaysMatch]) ].
 
@@ -70,9 +70,9 @@ generate_clause_match_all() ->
     erl_syntax:clause([erl_syntax:underscore()], none, [erl_syntax:atom(undefined)]).
 
 test() ->
-    List = [[{msg_name, list_to_atom("msg" ++ integer_to_list(X))},
+    List = [{{msg_name, list_to_atom("msg" ++ integer_to_list(X))},
              {msg_code, 1000+X},
-             {pb_module, list_to_atom("pb_msg" ++ integer_to_list(X))}] || X <- lists:seq(1,8000)],
+             {pb_module, list_to_atom("pb_msg" ++ integer_to_list(X))}} || X <- lists:seq(1,8000)],
     {Micros, Res} = timer:tc(fun generate_proto_info/2, [List, "proto.erl"]),
     io:format("haoxian ~p~n", [{Micros, Res}]).
 
