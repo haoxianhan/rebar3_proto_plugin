@@ -1,0 +1,6 @@
+[5,
+ {req_heartbeat,1,pb_client},
+ {req_shop_info,3,pb_shop},
+ {resp_heartbeat,2,pb_client},
+ {resp_shop_info,4,pb_shop},
+ {shop_info,5,pb_shop}].
