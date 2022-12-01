@@ -15,7 +15,7 @@ generate(AppInfo, State) ->
 
 to_list(Meta) ->
     {_CodeCount, Meta0} = maps:take(code_count, Meta),
-    lists:keysort(1, [{{msg_name, MsgName},
-                       {msg_code, MsgCode},
-                       {pb_module, PbModule}}
-                      || {MsgName, #{msg_code:=MsgCode, pb_module:=PbModule}} <- maps:to_list(Meta0)]).
+    Sorted = lists:keysort(1, maps:to_list(Meta0)),
+    [#{msg_name => MsgName,
+       msg_code => MsgCode,
+       pb_module => PbModule} || {MsgName, #{msg_code:=MsgCode, pb_module:=PbModule}} <- Sorted].
