@@ -18,7 +18,7 @@ Add the plugin to your rebar config:
 ```erlang
     {project_plugins, [
         {rebar3_gpb_plugin, "2.22.1"},
-        {rebar3_proto_plugin, "0.1.1"}
+        {rebar3_proto_plugin, "0.1.6"}
     ]}.
 ```
 
@@ -34,10 +34,11 @@ Config the `proto_opts` and `provider_hooks`:
     {provider_hooks, [
         {pre, [
                {compile, {protobuf, compile}},
+               {compile, {proto, generate}},
+
                {clean, {protobuf, clean}}
               ]},
         {post, [
-                {compile, {proto, generate}}
                ]
         }
     ]}.
