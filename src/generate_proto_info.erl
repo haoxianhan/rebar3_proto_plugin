@@ -38,33 +38,50 @@ generate_module(ModName, MetaList) ->
 
 %% get_msg_name(MsgCode) -> MsgName.
 generate_get_msg_name(MetaList) ->
-    Name = erl_syntax:atom(get_msg_name),
-    Clauses = [ erl_syntax:clause([erl_syntax:integer(MsgCode)], none, [erl_syntax:atom(MsgName)])
-                || #{msg_name := MsgName,
-                     msg_code := MsgCode} <- MetaList ],
-    AlwaysMatch = generate_clause_match_all(),
-    [ erl_syntax:function(Name, Clauses ++ [AlwaysMatch]) ].
+    ClausesMapsList = [ #{args => [MsgCode], return => MsgName}
+                        || #{msg_name := MsgName, msg_code := MsgCode} <- MetaList],
+    general_create_function(#{fun_name => get_msg_name,
+                              clauses => ClausesMapsList}).
 
 %% get_msg_code(MsgName) -> MsgCode.
 generate_get_msg_code(MetaList) ->
-    Name = erl_syntax:atom(get_msg_code),
-    Clauses = [ erl_syntax:clause([erl_syntax:atom(MsgName)], none, [erl_syntax:integer(MsgCode)])
-                || #{msg_name := MsgName,
-                     msg_code := MsgCode} <- MetaList ],
-    AlwaysMatch = generate_clause_match_all(),
-    [ erl_syntax:function(Name, Clauses ++ [AlwaysMatch]) ].
+    ClausesMapsList = [ #{args => [MsgName], return => MsgCode}
+                        || #{msg_name := MsgName, msg_code := MsgCode} <- MetaList],
+    general_create_function(#{fun_name => get_msg_code,
+                              clauses => ClausesMapsList}).
+
 
 %% get_msg_pbmodule(MsgCode) -> PbModule.
 generate_get_msg_pbmodule(MetaList) ->
-    Name = erl_syntax:atom(get_msg_pbmodule),
-    Clauses = [ erl_syntax:clause([erl_syntax:integer(MsgCode)], none, [erl_syntax:atom(PbModule)])
-                || #{msg_code := MsgCode,
-                     pb_module := PbModule} <- MetaList ],
-    AlwaysMatch = generate_clause_match_all(),
+    ClausesMapsList = [ #{args => [MsgCode], return => PbModule}
+                        || #{msg_code := MsgCode, pb_module := PbModule} <- MetaList],
+    general_create_function(#{fun_name => get_msg_pbmodule,
+                              clauses => ClausesMapsList}).
+
+
+
+%% MFA, A always a list
+general_create_function(#{fun_name:=FunName, clauses:=ClausesMapsList}) ->
+    Name = erl_syntax:atom(FunName),
+    Clauses = [ erl_syntax:clause(general_create_function_variable(Args), none, [general_create_function_variable(Return)])
+                || #{args := Args,
+                     return := Return} <- ClausesMapsList ],
+    AlwaysMatch = erl_syntax:clause([erl_syntax:underscore()], none, [erl_syntax:atom(undefined)]),
     [ erl_syntax:function(Name, Clauses ++ [AlwaysMatch]) ].
 
-generate_clause_match_all() ->
-    erl_syntax:clause([erl_syntax:underscore()], none, [erl_syntax:atom(undefined)]).
+%% conver variable
+general_create_function_variable(Var) when is_atom(Var) ->
+    erl_syntax:atom(Var);
+general_create_function_variable(Var) when is_integer(Var) ->
+    erl_syntax:integer(Var);
+general_create_function_variable(Var) when is_list(Var) ->
+    [general_create_function_variable(VarX) || VarX <- Var];
+general_create_function_variable(Var) when is_tuple(Var) ->
+    List = tuple_to_list(Var),
+    List1 = general_create_function_variable(List),
+    list_to_tuple(List1).
+
+
 
 test() ->
     List = [#{msg_name => list_to_atom("msg" ++ integer_to_list(X)),

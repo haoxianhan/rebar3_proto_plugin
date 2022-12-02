@@ -30,7 +30,12 @@ load_proto_file(Meta, [], _GpbOpts) ->
     Meta;
 load_proto_file(Meta, [HProto|T], GpbOpts) ->
     ProtoBaseName = filename:basename(HProto, ".proto"),
-    Mod = list_to_atom(filename:basename(get_target(HProto, GpbOpts), ".erl")),
+
+    rebar_api:debug("load module file: ~p~n", [{filename:rootname(get_target(HProto, GpbOpts), ".erl")}]),
+    {ok, Mod, Bin} = compile:file(filename:rootname(get_target(HProto, GpbOpts), ".erl"), [binary, {i, "include/"}]),
+    code:load_binary(Mod, [], Bin),
+
+    % Mod = list_to_atom(filename:basename(get_target(HProto, GpbOpts), ".erl")),
     MsgNameList = Mod:get_msg_containment(ProtoBaseName),
     NewMeta = load_msg(Mod, Meta, MsgNameList),
     load_proto_file(NewMeta, T, GpbOpts).
