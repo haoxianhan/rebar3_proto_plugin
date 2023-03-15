@@ -16,7 +16,7 @@ generate(AppInfo, _State, MetaList) ->
 
     CustomInfoFile = proplists:get_value(custom_info, ProtoOpts, undefined),
 
-    generate_proto_info(MetaList, OutProtoInfo, CustomInfoFile),
+    generate_proto_info(MetaList, OutProtoInfo, CustomInfoFile, AppDir),
 
     case proplists:get_value(proto_hrl, ProtoOpts, false) of
         true ->
@@ -35,14 +35,14 @@ generate(AppInfo, _State, MetaList) ->
 %% ----------------------------------------------------------------------------------------------------
 %% @doc generate_proto_info
 %% ----------------------------------------------------------------------------------------------------
-generate_proto_info(MetaList, OutProtoInfo, CustomInfoFile) ->
+generate_proto_info(MetaList, OutProtoInfo, CustomInfoFile, AppDir) ->
     ModuleName = erlang:list_to_atom(filename:rootname(filename:basename(OutProtoInfo))),
-    Module = generate_module(ModuleName, MetaList, CustomInfoFile),
+    Module = generate_module(ModuleName, MetaList, CustomInfoFile, AppDir),
     Formatted = erl_prettypr:format(Module),
     ok = file:write_file(OutProtoInfo, Formatted),
     ok.
 
-generate_module(ModName, MetaList, CustomInfoFile) ->
+generate_module(ModName, MetaList, CustomInfoFile, AppDir) ->
     Mod = erl_syntax:attribute(erl_syntax:atom(module), [erl_syntax:atom(ModName)]),
     _DefaultExportList = [ erl_syntax:arity_qualifier(erl_syntax:atom(Fun), erl_syntax:integer(1))
                     || Fun <- [get_msg_name, get_msg_code, get_msg_pbmodule] ],
@@ -50,7 +50,7 @@ generate_module(ModName, MetaList, CustomInfoFile) ->
                                                             fun generate_get_msg_code/1,
                                                             fun generate_get_msg_pbmodule/1]]),
 
-    [CustomExportList, CustomClaues] = generate_custom_info(CustomInfoFile, MetaList),
+    [CustomExportList, CustomClaues] = generate_custom_info(CustomInfoFile, MetaList, AppDir),
 
     Export = erl_syntax:attribute(erl_syntax:atom(export),
                                    [erl_syntax:list(CustomExportList)]),
@@ -81,11 +81,14 @@ generate_get_msg_pbmodule(MetaList) ->
                               clauses => ClausesMapsList}).
 
 %% generate custom function
-generate_custom_info(undefined, _) ->
+generate_custom_info(undefined, _, _AppDir) ->
     [];
-generate_custom_info(CustomInfoFile, MetaList) ->
-    rebar_api:debug("load module file: ~p~n", [{filename:rootname(CustomInfoFile, ".erl")}]),
-    {ok, Mod, Bin} = compile:file(filename:rootname(CustomInfoFile, ".erl"), [binary, {i, "include/"}]),
+generate_custom_info(CustomInfoFile, MetaList, AppDir) ->
+    LoadFile = filename:join([AppDir, filename:rootname(CustomInfoFile, ".erl")]),
+    LoadInclude = filename:join([AppDir,  "include/"]),
+
+    rebar_api:debug("load module file: ~p~n", [{LoadFile}]),
+    {ok, Mod, Bin} = compile:file(LoadFile, [binary, {i, LoadInclude}]),
     code:load_binary(Mod, [], Bin),
     generate_custom_info_1(MetaList, Mod:fun_list(), [], []).
 
@@ -147,7 +150,7 @@ test() ->
     List = [#{msg_name => list_to_atom("msg" ++ integer_to_list(X)),
               msg_code => 1000+X,
               pb_module => list_to_atom("pb_msg" ++ integer_to_list(X))} || X <- lists:seq(1,8000)],
-    {Micros, Res} = timer:tc(fun generate_proto_info/3, [List, "proto.erl", undefined]),
+    {Micros, Res} = timer:tc(fun generate_proto_info/4, [List, "proto.erl", undefined, ""]),
     io:format("test result: ~p~n", [{Micros, Res}]).
 
 

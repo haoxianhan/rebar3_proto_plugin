@@ -19,26 +19,28 @@ generate(AppInfo, State) ->
 
     {ok, GpbOpts} = dict:find(gpb_opts, Opts),
     FoundProtos = find_proto_files(AppDir, DepsDir, GpbOpts),
-    NewMeta = load_proto_file(Meta, FoundProtos, GpbOpts),
+    NewMeta = load_proto_file(Meta, FoundProtos, GpbOpts, AppDir),
 
     rebar_api:debug("proto write meta : ~p~n", [{NewMeta}]),
     write_meta_file(MetaFile, NewMeta),
     {ok, NewMeta}.
 
 %% load data to form meta
-load_proto_file(Meta, [], _GpbOpts) ->
+load_proto_file(Meta, [], _GpbOpts, _AppDir) ->
     Meta;
-load_proto_file(Meta, [HProto|T], GpbOpts) ->
+load_proto_file(Meta, [HProto|T], GpbOpts, AppDir) ->
     ProtoBaseName = filename:basename(HProto, ".proto"),
 
-    rebar_api:debug("load module file: ~p~n", [{filename:rootname(get_target(HProto, GpbOpts), ".erl")}]),
-    {ok, Mod, Bin} = compile:file(filename:rootname(get_target(HProto, GpbOpts), ".erl"), [binary, {i, "include/"}]),
+    LoadFile = filename:join([AppDir, filename:rootname(get_target(HProto, GpbOpts), ".erl")]),
+    LoadInclude = filename:join([AppDir,  "include/"]),
+    rebar_api:debug("load module file: ~p~n", [{LoadFile}]),
+    {ok, Mod, Bin} = compile:file(LoadFile, [binary, {i, LoadInclude}]),
     code:load_binary(Mod, [], Bin),
 
     % Mod = list_to_atom(filename:basename(get_target(HProto, GpbOpts), ".erl")),
     MsgNameList = Mod:get_msg_containment(ProtoBaseName),
     NewMeta = load_msg(Mod, Meta, MsgNameList),
-    load_proto_file(NewMeta, T, GpbOpts).
+    load_proto_file(NewMeta, T, GpbOpts, AppDir).
 
 load_msg(_Mod, Meta, []) ->
     Meta;
