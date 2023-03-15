@@ -22,7 +22,7 @@ Add the plugin to your rebar config:
 ```erlang
     {project_plugins, [
         {rebar3_gpb_plugin, "2.22.1"},
-        {rebar3_proto_plugin, "0.1.8"}
+        {rebar3_proto_plugin, "0.1.9"}
     ]}.
 ```
 
@@ -32,7 +32,12 @@ Config the `proto_opts` and `provider_hooks`:
     {proto_opts, [
                   {o_meta_file, "proto_info.meta"},
                   {o_proto_info, "src/proto_info.erl"},
-                  {custom_info, ["src/proto_info_custom.erl"]}
+                  {custom_info, ["src/proto_info_custom.erl"]},
+
+
+                  {proto_hrl, true},
+                  {proto_hrl_uppercase, true},
+                  {o_proto_hrl, "include/pt_define.hrl"}
                  ]}.
 
 
