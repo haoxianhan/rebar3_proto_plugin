@@ -17,8 +17,24 @@ generate(AppInfo, _State, MetaList) ->
     CustomInfoFile = proplists:get_value(custom_info, ProtoOpts, undefined),
 
     generate_proto_info(MetaList, OutProtoInfo, CustomInfoFile),
+
+    case proplists:get_value(proto_hrl, ProtoOpts, false) of
+        true ->
+            ProtoHrlFile = proplists:get_value(o_proto_hrl, ProtoOpts, "proto.hrl"),
+            OutProtoHrl = filename:join([AppDir, ProtoHrlFile]),
+
+            IsUppercase = proplists:get_value(proto_hrl_uppercase, ProtoOpts, false),
+
+            generate_proto_info_hrl(MetaList, OutProtoHrl, IsUppercase);
+        _ ->
+            skip
+    end,
+
     ok.
 
+%% ----------------------------------------------------------------------------------------------------
+%% @doc generate_proto_info
+%% ----------------------------------------------------------------------------------------------------
 generate_proto_info(MetaList, OutProtoInfo, CustomInfoFile) ->
     ModuleName = erlang:list_to_atom(filename:rootname(filename:basename(OutProtoInfo))),
     Module = generate_module(ModuleName, MetaList, CustomInfoFile),
@@ -102,6 +118,29 @@ general_create_function_variable(Var) when is_tuple(Var) ->
     List1 = general_create_function_variable(List),
     list_to_tuple(List1).
 
+
+%% ----------------------------------------------------------------------------------------------------
+%% @doc generate_proto_info_hrl
+%% ----------------------------------------------------------------------------------------------------
+generate_proto_info_hrl(MetaList, OutProtoHrl, IsUppercase) ->
+    Hrl = generate_hrl(MetaList, IsUppercase),
+    Formatted = erl_prettypr:format(Hrl),
+    ok = file:write_file(OutProtoHrl, Formatted),
+    ok.
+
+generate_hrl(MetaList, IsUppercase) ->
+    generate_hrl(MetaList, IsUppercase, []).
+
+generate_hrl([], _IsUppercase, Acc) ->
+    erl_syntax:form_list(Acc);
+generate_hrl([#{msg_name:=MsgName, msg_code:=MsgCode}|T], IsUppercase, Acc) ->
+    FixMsgName = case IsUppercase of
+                     true -> erlang:list_to_atom(string:uppercase(erlang:atom_to_list(MsgName)));
+                     _ -> MsgName
+                 end,
+
+    Def = erl_syntax:attribute(erl_syntax:atom(define), [erl_syntax:atom(FixMsgName), erl_syntax:integer(MsgCode)]),
+    generate_hrl(T, IsUppercase, [Def | Acc]).
 
 
 test() ->
