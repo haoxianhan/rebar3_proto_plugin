@@ -28,17 +28,17 @@ generate_proto_info(MetaList, OutProtoInfo, CustomInfoFile) ->
 
 generate_module(ModName, MetaList, CustomInfoFile) ->
     Mod = erl_syntax:attribute(erl_syntax:atom(module), [erl_syntax:atom(ModName)]),
-    DefaultExportList = [ erl_syntax:arity_qualifier(erl_syntax:atom(Fun), erl_syntax:integer(1))
+    _DefaultExportList = [ erl_syntax:arity_qualifier(erl_syntax:atom(Fun), erl_syntax:integer(1))
                     || Fun <- [get_msg_name, get_msg_code, get_msg_pbmodule] ],
-    DefaultClauses = lists:append([Fun(MetaList) || Fun <- [fun generate_get_msg_name/1,
+    _DefaultClauses = lists:append([Fun(MetaList) || Fun <- [fun generate_get_msg_name/1,
                                                             fun generate_get_msg_code/1,
                                                             fun generate_get_msg_pbmodule/1]]),
 
     [CustomExportList, CustomClaues] = generate_custom_info(CustomInfoFile, MetaList),
 
     Export = erl_syntax:attribute(erl_syntax:atom(export),
-                                   [erl_syntax:list(DefaultExportList++CustomExportList)]),
-    Clauses = DefaultClauses++CustomClaues,
+                                   [erl_syntax:list(CustomExportList)]),
+    Clauses = CustomClaues,
 
     erl_syntax:form_list([Mod, Export| Clauses]).
 
@@ -109,6 +109,6 @@ test() ->
               msg_code => 1000+X,
               pb_module => list_to_atom("pb_msg" ++ integer_to_list(X))} || X <- lists:seq(1,8000)],
     {Micros, Res} = timer:tc(fun generate_proto_info/3, [List, "proto.erl", undefined]),
-    io:format("haoxian ~p~n", [{Micros, Res}]).
+    io:format("test result: ~p~n", [{Micros, Res}]).
 
 
