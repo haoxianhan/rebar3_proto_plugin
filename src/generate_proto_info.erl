@@ -44,12 +44,6 @@ generate_proto_info(MetaList, OutProtoInfo, CustomInfoFile, AppDir) ->
 
 generate_module(ModName, MetaList, CustomInfoFile, AppDir) ->
     Mod = erl_syntax:attribute(erl_syntax:atom(module), [erl_syntax:atom(ModName)]),
-    _DefaultExportList = [ erl_syntax:arity_qualifier(erl_syntax:atom(Fun), erl_syntax:integer(1))
-                    || Fun <- [get_msg_name, get_msg_code, get_msg_pbmodule] ],
-    _DefaultClauses = lists:append([Fun(MetaList) || Fun <- [fun generate_get_msg_name/1,
-                                                            fun generate_get_msg_code/1,
-                                                            fun generate_get_msg_pbmodule/1]]),
-
     [CustomExportList, CustomClaues] = generate_custom_info(CustomInfoFile, MetaList, AppDir),
 
     Export = erl_syntax:attribute(erl_syntax:atom(export),
@@ -57,28 +51,6 @@ generate_module(ModName, MetaList, CustomInfoFile, AppDir) ->
     Clauses = CustomClaues,
 
     erl_syntax:form_list([Mod, Export| Clauses]).
-
-%% get_msg_name(MsgCode) -> MsgName.
-generate_get_msg_name(MetaList) ->
-    ClausesMapsList = [ #{args => [MsgCode], return => MsgName}
-                        || #{msg_name := MsgName, msg_code := MsgCode} <- MetaList],
-    general_create_function(#{fun_name => get_msg_name,
-                              clauses => ClausesMapsList}).
-
-%% get_msg_code(MsgName) -> MsgCode.
-generate_get_msg_code(MetaList) ->
-    ClausesMapsList = [ #{args => [MsgName], return => MsgCode}
-                        || #{msg_name := MsgName, msg_code := MsgCode} <- MetaList],
-    general_create_function(#{fun_name => get_msg_code,
-                              clauses => ClausesMapsList}).
-
-
-%% get_msg_pbmodule(MsgCode) -> PbModule.
-generate_get_msg_pbmodule(MetaList) ->
-    ClausesMapsList = [ #{args => [MsgCode], return => PbModule}
-                        || #{msg_code := MsgCode, pb_module := PbModule} <- MetaList],
-    general_create_function(#{fun_name => get_msg_pbmodule,
-                              clauses => ClausesMapsList}).
 
 %% generate custom function
 generate_custom_info(undefined, _, _AppDir) ->
@@ -103,7 +75,9 @@ generate_custom_info_1(MetaList, [HFun|TFun], AccExportList, AccFunList) ->
 %% MFA, A always a list
 general_create_function(#{fun_name:=FunName, clauses:=ClausesMapsList}) ->
     Name = erl_syntax:atom(FunName),
-    Clauses = [ erl_syntax:clause(general_create_function_variable(Args), none, [general_create_function_variable(Return)])
+    Clauses = [ erl_syntax:clause([general_create_function_variable(Arg) || Arg <- Args],
+                                  none,
+                                  [general_create_function_variable(Return)])
                 || #{args := Args,
                      return := Return} <- ClausesMapsList ],
     AlwaysMatch = erl_syntax:clause([erl_syntax:underscore()], none, [erl_syntax:atom(undefined)]),
@@ -115,11 +89,11 @@ general_create_function_variable(Var) when is_atom(Var) ->
 general_create_function_variable(Var) when is_integer(Var) ->
     erl_syntax:integer(Var);
 general_create_function_variable(Var) when is_list(Var) ->
-    [general_create_function_variable(VarX) || VarX <- Var];
+    erl_syntax:list([general_create_function_variable(VarX) || VarX <- Var]);
 general_create_function_variable(Var) when is_tuple(Var) ->
     List = tuple_to_list(Var),
-    List1 = general_create_function_variable(List),
-    list_to_tuple(List1).
+    List1 = [general_create_function_variable(X) || X <- List],
+    erl_syntax:tuple(List1).
 
 
 %% ----------------------------------------------------------------------------------------------------
