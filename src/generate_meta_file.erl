@@ -1,7 +1,8 @@
 -module(generate_meta_file).
 
 -export([
-         generate/2
+         generate/2,
+         spawn_load_proto_file/5
         ]).
 
 %% create proto.meta file
@@ -26,9 +27,26 @@ generate(AppInfo, State) ->
     {ok, NewMeta}.
 
 %% load data to form meta
-load_proto_file(Meta, [], _GpbOpts, _AppDir) ->
+load_proto_file(Meta, ProtoList, GpbOpts, AppDir) ->
+    RefList = [begin
+                   Ref = make_ref(),
+                   spawn(?MODULE, spawn_load_proto_file, [self(), Ref, HProto, GpbOpts, AppDir]),
+                   Ref
+               end || HProto <- ProtoList],
+    rebar_api:debug("prepare receive ~p", [RefList]),
+    receive_load_proto_file(RefList, Meta).
+
+receive_load_proto_file([], Meta) ->
     Meta;
-load_proto_file(Meta, [HProto|T], GpbOpts, AppDir) ->
+receive_load_proto_file([Ref|T], Meta) ->
+    rebar_api:debug("receiving ~p", [Ref]),
+    receive
+        {RRef, Mod, MsgNameList} when Ref == RRef ->
+            NewMeta = load_msg(Mod, Meta, MsgNameList),
+            receive_load_proto_file(T, NewMeta)
+    end.
+
+spawn_load_proto_file(From, Ref, HProto, GpbOpts, AppDir) ->
     ProtoBaseName = filename:basename(HProto, ".proto"),
 
     LoadFile = filename:join([AppDir, filename:rootname(get_target(HProto, GpbOpts), ".erl")]),
@@ -39,8 +57,7 @@ load_proto_file(Meta, [HProto|T], GpbOpts, AppDir) ->
 
     % Mod = list_to_atom(filename:basename(get_target(HProto, GpbOpts), ".erl")),
     MsgNameList = Mod:get_msg_containment(ProtoBaseName),
-    NewMeta = load_msg(Mod, Meta, MsgNameList),
-    load_proto_file(NewMeta, T, GpbOpts, AppDir).
+    From ! {Ref, Mod, MsgNameList}.
 
 load_msg(_Mod, Meta, []) ->
     Meta;
