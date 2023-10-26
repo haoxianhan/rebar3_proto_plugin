@@ -50,8 +50,9 @@ spawn_load_proto_file(From, Ref, HProto, GpbOpts, AppDir) ->
     ProtoBaseName = filename:basename(HProto, ".proto"),
 
     LoadFile = filename:join([AppDir, filename:rootname(get_target(HProto, GpbOpts), ".erl")]),
-    LoadInclude = filename:join([AppDir,  "include/"]),
-    rebar_api:debug("load module file: ~p~n", [{LoadFile}]),
+    {_, Ohrl} = lists:keyfind(o_hrl, 1, GpbOpts), %% need to include gpb.hrl
+    LoadInclude = filename:join([AppDir, filename:rootname(Ohrl)]), %% compatible with absolute path
+    rebar_api:debug("load module file: ~p~n", [{LoadFile, LoadInclude}]),
     {ok, Mod, Bin} = compile:file(LoadFile, [binary, {i, LoadInclude}]),
     code:load_binary(Mod, [], Bin),
 
