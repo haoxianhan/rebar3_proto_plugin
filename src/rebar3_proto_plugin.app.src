@@ -1,6 +1,6 @@
 {application, rebar3_proto_plugin,
  [{description, "A rebar plugin for generating gpb proto info"},
-  {vsn, "0.1.12"},
+  {vsn, "0.1.13"},
   {registered, []},
   {applications,
    [kernel,
