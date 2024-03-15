@@ -20,11 +20,47 @@ generate(AppInfo, State) ->
 
     {ok, GpbOpts} = dict:find(gpb_opts, Opts),
     FoundProtos = find_proto_files(AppDir, DepsDir, GpbOpts),
-    NewMeta = load_proto_file(Meta, FoundProtos, GpbOpts, AppDir),
+    {Meta1, FilterProtos} = filter_protos_modify(Meta, FoundProtos),
+    rebar_api:debug("filter proto : ~p~n", [{FilterProtos}]),
 
-    rebar_api:debug("proto write meta : ~p~n", [{NewMeta}]),
-    write_meta_file(MetaFile, NewMeta),
-    {ok, NewMeta}.
+    Meta2 = load_proto_file(Meta1, FilterProtos, GpbOpts, AppDir),
+
+    rebar_api:debug("proto write meta : ~p~n", [{Meta2}]),
+    write_meta_file(MetaFile, Meta2),
+    {ok, Meta2}.
+
+filter_protos_modify(Meta, FoundProtos) ->
+    #{proto := ProtoMap} = Meta,
+    {NewProtoMap, FilterProtos} = filter_protos_modify(ProtoMap, FoundProtos, []),
+    {Meta#{proto := NewProtoMap}, FilterProtos}.
+
+filter_protos_modify(ProtoMap, [], Acc) ->
+    {ProtoMap, Acc};
+filter_protos_modify(ProtoMap, [H|T], Acc) ->
+    case filter_protos_modify_check(ProtoMap, H) of
+        {true, CurrentMd5sum} ->
+            HBaseName = filename:basename(H),
+            filter_protos_modify(ProtoMap#{HBaseName => CurrentMd5sum}, T, [H|Acc]);
+        _ ->
+            filter_protos_modify(ProtoMap, T, Acc)
+    end.
+
+filter_protos_modify_check(ProtoMap, H) ->
+    CurrentMd5sum = case file:read_file(H) of
+                        {ok, Binary} ->
+                            erlang:md5(Binary);
+                        _ ->
+                            <<>>
+                    end,
+
+    HBaseName = filename:basename(H),
+    case maps:find(HBaseName, ProtoMap) of
+        error ->
+            {true, CurrentMd5sum};
+        {ok, OriginMd5Str} ->
+            rebar_api:debug("originmd5sum : ~s, current_md5sum: ~s", [OriginMd5Str, CurrentMd5sum]),
+            {not (OriginMd5Str == CurrentMd5sum), CurrentMd5sum}
+    end.
 
 %% load data to form meta
 load_proto_file(Meta, ProtoList, GpbOpts, AppDir) ->
@@ -50,9 +86,8 @@ spawn_load_proto_file(From, Ref, HProto, GpbOpts, AppDir) ->
     ProtoBaseName = filename:basename(HProto, ".proto"),
 
     LoadFile = filename:join([AppDir, filename:rootname(get_target(HProto, GpbOpts), ".erl")]),
-    {_, Ohrl} = lists:keyfind(o_hrl, 1, GpbOpts), %% need to include gpb.hrl
-    LoadInclude = filename:join([AppDir, filename:rootname(Ohrl)]), %% compatible with absolute path
-    rebar_api:debug("load module file: ~p~n", [{LoadFile, LoadInclude}]),
+    LoadInclude = filename:join([AppDir,  "include/"]),
+    rebar_api:debug("load module file: ~p~n", [{LoadFile}]),
     {ok, Mod, Bin} = compile:file(LoadFile, [binary, {i, LoadInclude}]),
     code:load_binary(Mod, [], Bin),
 
@@ -63,13 +98,13 @@ spawn_load_proto_file(From, Ref, HProto, GpbOpts, AppDir) ->
 load_msg(_Mod, Meta, []) ->
     Meta;
 load_msg(Mod, Meta, [HMsg|T]) ->
-    #{code_count := CodeCount} = Meta,
-    NewMeta = case maps:is_key(HMsg, Meta) of
+    #{code_count := CodeCount, message := MessageMap} = Meta,
+    NewMeta = case maps:is_key(HMsg, MessageMap) of
                   false ->
                       AccCodeCount = CodeCount + 1,
                       Meta#{ code_count := AccCodeCount,
-                             HMsg => #{msg_code => AccCodeCount,
-                                       pb_module => Mod}};
+                             message => MessageMap#{ HMsg => #{msg_code => AccCodeCount,
+                                                               pb_module => Mod}}};
                   _ ->
                       Meta
               end,
@@ -79,23 +114,18 @@ load_msg(Mod, Meta, [HMsg|T]) ->
 read_meta_file(MetaFile) ->
     rebar_api:debug("read meta file: ~p~n", [MetaFile]),
     case file:consult(MetaFile) of
-        {ok, [[CodeCount|RawMeta]]} ->
-            Map = #{code_count => CodeCount},
-            lists:foldl(fun({MsgName, MsgCode, PbModule}, AccMap) ->
-                                AccMap#{MsgName => #{msg_code => MsgCode,
-                                                     pb_module => PbModule}}
-                        end, Map, RawMeta);
+        {ok, [Meta]} ->
+            Meta;
         _ ->
-            #{code_count => 0}
+            #{code_count => 0,
+              message => #{},
+              proto => #{}
+             }
     end.
 
 %% write meta file
 write_meta_file(MetaFile, Meta) ->
-    {CodeCount, Meta0} = maps:take(code_count, Meta),
-    List0 = lists:keysort(1, [{MsgName, MsgCode, PbModule}
-                              || {MsgName, #{msg_code:=MsgCode, pb_module:=PbModule}} <- maps:to_list(Meta0)]),
-    ok = file:write_file(MetaFile, io_lib:format("~p.~n", [[CodeCount|List0]])).
-
+   ok = file:write_file(MetaFile, io_lib:format("~p.~n", [Meta])).
 
 
 %% copy from rebar3_gbp_plugin
