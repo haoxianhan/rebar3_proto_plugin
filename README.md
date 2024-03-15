@@ -22,7 +22,7 @@ Add the plugin to your rebar config:
 ```erlang
     {project_plugins, [
         {rebar3_gpb_plugin, "2.22.1"},
-        {rebar3_proto_plugin, "0.1.13"}
+        {rebar3_proto_plugin, "0.1.14"}
     ]}.
 ```
 
