@@ -1,6 +1,12 @@
-[5,
- {req_heartbeat,1,pb_client},
- {req_shop_info,3,pb_shop},
- {resp_heartbeat,2,pb_client},
- {resp_shop_info,4,pb_shop},
- {shop_info,5,pb_shop}].
+#{code_count => 5,
+  message =>
+      #{req_heartbeat => #{msg_code => 4,pb_module => pb_client},
+        req_shop_info => #{msg_code => 1,pb_module => pb_shop},
+        resp_heartbeat => #{msg_code => 5,pb_module => pb_client},
+        resp_shop_info => #{msg_code => 2,pb_module => pb_shop},
+        shop_info => #{msg_code => 3,pb_module => pb_shop}},
+  proto =>
+      #{"client.proto" =>
+            <<125,30,173,110,39,59,166,127,162,0,90,227,200,255,5,36>>,
+        "shop.proto" =>
+            <<18,72,104,38,192,190,148,82,86,43,208,51,197,221,17,98>>}}.
