@@ -85,13 +85,13 @@ receive_load_proto_file([Ref|T], Meta) ->
 spawn_load_proto_file(From, Ref, HProto, GpbOpts, AppDir) ->
     ProtoBaseName = filename:basename(HProto, ".proto"),
 
-    LoadFile = filename:join([AppDir, filename:rootname(get_target(HProto, GpbOpts), ".erl")]),
-    LoadInclude = filename:join([AppDir,  "include/"]),
-    rebar_api:debug("load module file: ~p~n", [{LoadFile}]),
+    LoadFile = filename:join([AppDir, filename:rootname(get_target_erl(HProto, GpbOpts), ".erl")]),
+    LoadInclude = filename:join([AppDir, proplists:get_value(o_hrl, GpbOpts)]),
+
+    rebar_api:debug("load module file: ~p~n", [{LoadFile, LoadInclude}]),
     {ok, Mod, Bin} = compile:file(LoadFile, [binary, {i, LoadInclude}]),
     code:load_binary(Mod, [], Bin),
 
-    % Mod = list_to_atom(filename:basename(get_target(HProto, GpbOpts), ".erl")),
     MsgNameList = Mod:get_msg_containment(ProtoBaseName),
     From ! {Ref, Mod, MsgNameList}.
 
@@ -125,7 +125,7 @@ read_meta_file(MetaFile) ->
 
 %% write meta file
 write_meta_file(MetaFile, Meta) ->
-   ok = file:write_file(MetaFile, io_lib:format("~p.~n", [Meta])).
+   ok = file:write_file(MetaFile, io_lib:format("~w.~n", [Meta])).
 
 
 %% copy from rebar3_gbp_plugin
@@ -152,7 +152,12 @@ find_proto_files(AppDir, DepsDir, GpbOpts) ->
     FoundProtos.
 
 %% copy from rebar3_gbp_plugin
-get_target(Proto, GpbOpts) ->
+get_target_erl(Proto, GpbOpts) ->
     InputsOutputs = gpb_compile:list_io(Proto, GpbOpts),
     {erl_output, Erl} = lists:keyfind(erl_output, 1, InputsOutputs),
     Erl.
+
+get_target_hrl(Proto, GpbOpts) ->
+    InputsOutputs = gpb_compile:list_io(Proto, GpbOpts),
+    {hrl_output, Hrl} = lists:keyfind(hrl_output, 1, InputsOutputs),
+    Hrl.
