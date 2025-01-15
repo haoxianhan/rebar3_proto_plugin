@@ -99,12 +99,14 @@ load_msg(_Mod, Meta, []) ->
     Meta;
 load_msg(Mod, Meta, [HMsg|T]) ->
     #{code_count := CodeCount, message := MessageMap} = Meta,
-    NewMeta = case maps:is_key(HMsg, MessageMap) of
+    NewMeta = case maps:get(HMsg, MessageMap, false) of
                   false ->
                       AccCodeCount = CodeCount + 1,
                       Meta#{ code_count := AccCodeCount,
                              message => MessageMap#{ HMsg => #{msg_code => AccCodeCount,
                                                                pb_module => Mod}}};
+                  #{pb_module := OldMod} = OldHMsgInfo when OldMod =/= Mod ->
+                      Meta#{message => MessageMap#{HMsg => OldHMsgInfo#{pb_module => Mod}}};
                   _ ->
                       Meta
               end,
