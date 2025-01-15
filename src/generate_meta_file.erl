@@ -75,11 +75,16 @@ load_proto_file(Meta, ProtoList, GpbOpts, AppDir) ->
 receive_load_proto_file([], Meta) ->
     Meta;
 receive_load_proto_file([Ref|T], Meta) ->
-    rebar_api:debug("receiving ~p", [Ref]),
     receive
-        {RRef, Mod, MsgNameList} when Ref == RRef ->
+        {RRef, {ok, Mod, MsgNameList}} when Ref == RRef ->
             NewMeta = load_msg(Mod, Meta, MsgNameList),
-            receive_load_proto_file(T, NewMeta)
+            receive_load_proto_file(T, NewMeta);
+        {RRef, {error, Reason}} when Ref == RRef ->
+            rebar_api:error("Proto compilation failed: ~p", [Reason]),
+            receive_load_proto_file(T, Meta)
+    after 30*1000 ->
+        rebar_api:error("Proto compilation timeout for ref: ~p", [Ref]),
+        receive_load_proto_file(T, Meta)
     end.
 
 spawn_load_proto_file(From, Ref, HProto, GpbOpts, AppDir) ->
@@ -89,11 +94,23 @@ spawn_load_proto_file(From, Ref, HProto, GpbOpts, AppDir) ->
     LoadInclude = filename:join([AppDir, proplists:get_value(o_hrl, GpbOpts)]),
 
     rebar_api:debug("load module file: ~p~n", [{LoadFile, LoadInclude}]),
-    {ok, Mod, Bin} = compile:file(LoadFile, [binary, {i, LoadInclude}]),
-    code:load_binary(Mod, [], Bin),
-
-    MsgNameList = Mod:get_msg_containment(ProtoBaseName),
-    From ! {Ref, Mod, MsgNameList}.
+    try
+        case compile:file(LoadFile, [binary, {i, LoadInclude}]) of
+            {ok, Mod, Bin} ->
+                case code:load_binary(Mod, [], Bin) of
+                    {module, _} ->
+                        MsgNameList = Mod:get_msg_containment(ProtoBaseName),
+                        From ! {Ref, {ok, Mod, MsgNameList}};
+                    Error ->
+                        From ! {Ref, {error, {load_failed, Error}}}
+                end;
+            Error ->
+                From ! {Ref, {error, {compile_failed, Error}}}
+        end
+    catch
+        Error1:Reason:Stack ->
+            From ! {Ref, {error, {Error1, Reason, Stack}}}
+    end.
 
 load_msg(_Mod, Meta, []) ->
     Meta;
